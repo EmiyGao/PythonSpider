@@ -3,6 +3,7 @@ from newspaper import Article
 import os
 import threading
 from queue import Queue
+import json
 
 
 class NewsSpider:
@@ -12,7 +13,8 @@ class NewsSpider:
         self.main_url_file = 'platform list.txt'
         self.news_paper_size = None
         self.news_brand = None
-        self.platform_url_queue = Queue()
+        self.Article_detas_list = None
+
         self.article_url_queue = Queue()
         self.content_queue = Queue()
 
@@ -27,20 +29,21 @@ class NewsSpider:
 
     # get different platform url
     def platform_url_list(self):
+        platform_list = []
         file_path = os.path.join(self.current_path, self.main_url_file)
         with open(file_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 print(line)
-                self.platform_url_queue.put(line)
+                platform_list.append(line)
+        return platform_list
         print(self.platform_url_queue)
         print("*******end of get platform_url*********")
     # build source and get articles urls
 
-    def articles_url_list(self):
+    def articles_url_list(self,plat_url_list):
         print("*******start get articles_url*********")
-        while True:
-            platfrom_url = self.platform_url_queue.get()
+        for platfrom_url in plat_url_list:
             news_paper = newspaper.build(platfrom_url,memoize_articles=False)
             for article in news_paper.articles:
                 article_list = []
@@ -50,8 +53,6 @@ class NewsSpider:
                 print(article_list)
                 self.article_url_queue.put(article_list)
             print("have got", self.news_brand, news_paper.size(), "articles'")
-            self.platform_url_queue.task_done()
-            print("**********task done 1************")
         print("*******end of get articles_url*********")
     # download articles and parse
     def parse_article(self):
@@ -60,68 +61,65 @@ class NewsSpider:
             article_url = self.article_url_queue.get()
             print(article_url[1])
             Article_html = Article(url=article_url[1])
-            Article_html.download()
-            Article_html.parse()
-            Article_detas_list = []
-            Article_details = {}
-            Article_details["class"] = article_url[0]
-            Article_details["title"] = Article_html.title if len(Article_html.title) > 0 else None
-            Article_details["top_image"] = Article_html.top_image if len(Article_html.top_image) > 0 else None
-            Article_details["author"] = Article_html.authors if len(Article_html.authors) > 0 else None
-            Article_details["Image list"] = Article_html.images if len(Article_html.images) > 0 else None
-            Article_details["Videos"] = Article_html.movies if len(Article_html.movies) > 0 else None
-            Article_details["Text"] = Article_html.text if len(Article_html.text) > 0 else None
-            if Article_details["Text"] and Article_details["title"] is not None:
-                Article_html.nlp()
-                Article_details["summary"] = Article_html.summary if len(Article_html.summary) > 0 else None
-                Article_details["keywords"] = Article_html.keywords if len(Article_html.keywords) > 0 else None
+            try:
+                Article_html.download()
+            except ArticleException:
+                print("error in url",Article_html)
+                continue
             else:
-                Article_details["summary"] = None
-                Article_details["keywords"] = None
-            Article_detas_list.append(Article_details)
-            self.content_queue.put(Article_detas_list)
+                Article_html.parse()
+                self.Article_detas_list = []
+                Article_details = {}
+                Article_details["class"] = article_url[0]
+                Article_details["title"] = Article_html.title if len(Article_html.title) > 0 else None
+                Article_details["top_image"] = Article_html.top_image if len(Article_html.top_image) > 0 else None
+                Article_details["author"] = Article_html.authors if len(Article_html.authors) > 0 else None
+                Article_details["Image list"] = Article_html.images if len(Article_html.images) > 0 else None
+                Article_details["Videos"] = Article_html.movies if len(Article_html.movies) > 0 else None
+                Article_details["Text"] = Article_html.text if len(Article_html.text) > 0 else None
+                if Article_details["Text"] and Article_details["title"] is not None:
+                    Article_html.nlp()
+                    Article_details["summary"] = Article_html.summary if len(Article_html.summary) > 0 else None
+                    Article_details["keywords"] = Article_html.keywords if len(Article_html.keywords) > 0 else None
+                else:
+                    Article_details["summary"] = None
+                    Article_details["keywords"] = None
+                self.Article_detas_list.append(Article_details)
+                print(self.Article_detas_list)
+                self.save_data(self.Article_detas_list)
             self.article_url_queue.task_done()
         print("*******end of get parse_article*********")
 
     # save article data
-    def save_data(self):
+    def save_data(self,Article_detas_list):
         print("*******start save_data*********")
         file_path = 'news details.txt'
         with open(file_path, "w+", encoding="utf-8") as pf:
-            while True:
-                content_list = self.content_queue.get()
-                for content in content_list:
-                    f.write(json.dumps(content, ensure_ascii=False, indent=1))
-                    f.write("\n")
-                self.content_queue.task_done()
+            for content in Article_detas_list:
+                pf.write(json.dumps(content, ensure_ascii=False, indent=1))
+                pf.write("\n")
                 print("saved successfully")
 
     # main logic:
     def run(self):
         thread_list = []
         # 1. prepare url list for different platform
-        for i in range(1):
-            t_plt_url = threading.Thread(target=self.platform_url_list())
-            thread_list.append(t_plt_url)
+        plat_url_list = self.platform_url_list()
         # 2. according to the different platform to get all the articles url
-        for i in range(1):
-           t_art_url = threading.Thread(target=self.articles_url_list())
-           thread_list.append(t_art_url)
+        self.articles_url_list(plat_url_list)
         # 3. parse url and get article details and parse it.
-        for i in range(20):
-            t_parse_url = threading.Thread(target=self.parse_article())
-            thread_list.append(t_parse_url)
+        t_parse_url = threading.Thread(target=self.parse_article())
+        thread_list.append(t_parse_url)
         # 4. save article details
-        for i in range(10):
-            t_save_data = threading.Thread(target=self.save_data())
-            thread_list.append(t_save_data)
+        t_save_data = threading.Thread(target=self.save_data())
+        thread_list.append(t_save_data)
         # 5. start main thread
         for t in thread_list:
             t.setDaemon(True)  # when main thread end, program end, no need to check child thread completed or not
             t.start()
         print("main thread end")
         # 6. hold main thread untill all the Child thread completed
-        for q in [self.main_url_queue, self.html_queue, self.content_queue]:
+        for q in [self.article_url_queue, self.content_queue]:
             q.join()
         print("all thread end")
 

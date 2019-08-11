@@ -4,10 +4,15 @@ Python Spider code libray
 # This program for news spider
 # Installation：
 pip3 install newspaper3k
+
 pip3 install fake_useragent
+
 pip3 install telnetlib
+
 pip3 install random
+
 pip3 install requests
+
 pip3 install pymysql
 
 # Programs List：

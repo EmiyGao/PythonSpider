@@ -9,6 +9,8 @@ class MusicPlay:
     def __init__(self):
         self.connet_mysql = None
         self.cursor = None
+        self.total = 0
+        self.lyric_list =[]
 
     def play_music(self):
         filepath = self.music_path
@@ -16,30 +18,39 @@ class MusicPlay:
         # 加载音乐
         pygame.mixer.music.load(filepath)
         print("Start play %s music %s" % (self.music_author, self.music_name))
+        print("剩余 %s 歌"%self.total)
         pygame.mixer.music.play(start=0.0)
-        lyric_list = self.music_lyric.split(',')
-        cust_time = 0
-        for lyric in lyric_list:
-            time.sleep(2)
-            cust_time = cust_time + 2
-            print(lyric)
-        print(cust_time)
         music_time = time.strptime(self.music_time, "%M:%S")
-        print(music_time.tm_min * 60 + music_time.tm_sec)
-        time.sleep(music_time.tm_min * 60 + music_time.tm_sec + 3 - cust_time)
+        music_total_time = music_time.tm_min * 60 + music_time.tm_sec
+        print("歌曲时长",music_total_time,"秒")
+        cust_time = 0
+        total_time = 0
+        for lyric in self.music_lyric:
+            slep_time = float(lyric['time'])-cust_time
+            time.sleep(slep_time)
+            print(lyric['lineLyric'])
+            cust_time = float(lyric['time'])
+            total_time=total_time+slep_time
+        # print(total_time)
+        time.sleep(music_time.tm_min * 60 + music_time.tm_sec + 2 - total_time)
         pygame.mixer.music.stop()
         print("Current one music end, start play next one music!")
 
     def get_music(self):
         self.cursor.execute("select * from musicdata.kwmusic")
         self.music_data = self.cursor.fetchall()
+        total = len(self.music_data)
+        print("共 %s 首歌即将播放"%total)
         for music in (self.music_data):
             # print(music)
+            self.total = total -1
             self.music_name = music[1]
             self.music_author = music[2]
-            self.music_time = music[8]
-            self.music_path = music[11]
-            self.music_lyric = music[12]
+            self.music_time = music[9]
+            self.music_path = music[12]
+            print(self.music_path)
+            self.music_lyric = eval(music[13])
+            # print(self.music_lyric)
             self.play_music()
 
     def connect_mysql(self):

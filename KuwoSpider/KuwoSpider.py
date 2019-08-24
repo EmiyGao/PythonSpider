@@ -7,6 +7,7 @@ import random
 import requests
 import json
 import pymysql
+import os
 
 class KuwoMusicSpider:
 
@@ -17,6 +18,7 @@ class KuwoMusicSpider:
         self.url_list = None
         self.user_agent_list = None
         self.music_mp3 =None
+        self.music_data =None
         self.Article_details = {}
         self.url_queue = Queue()
         self.html_queue = Queue()
@@ -30,9 +32,10 @@ class KuwoMusicSpider:
 
     def get_url_list(self):
         apart_url = '&pn={}&rn=30'
-        for i in range(93, 94):   #类型数字
+        # for i in range(158, 159):   #类型数字
+        for i in range(93, 94):
             a = self.start_url.format(i)
-            for j in range(1, 10):  #page
+            for j in range(1, 3):  #page
                 self.url_list = a + apart_url.format(j)
                 # print(self.url_list)
                 self.url_queue.put(self.url_list)
@@ -97,10 +100,12 @@ class KuwoMusicSpider:
             mp3_url = response.json().get('url')
             response1 = requests.get(url=mp3_url, headers=headers, timeout=3)
             if response1.status_code == 200:
-                music_data = response1.content
+                self.music_data = response1.content
+            else:
+                mp3_url = None
         else:
             mp3_url = None
-        return mp3_url,music_data
+        return mp3_url,self.music_data
 
     def get_lyric(self, rid):
         details_lyric_url = self.lyric_url.format(rid)
@@ -110,17 +115,18 @@ class KuwoMusicSpider:
         response = requests.get(url=details_lyric_url, headers=headers, timeout=3)
         if response.status_code == 200:
             lyric_str = response.json().get('data').get('lrclist')
-            lyric_list = []
-            for lyric in lyric_str:
-                lyric_list.append(lyric.get('lineLyric'))
-        else:
-            lyric_list = None
-        return lyric_list
+        #     lyric_list = []
+        #     for lyric in lyric_str:
+        #         lyric_list.append(lyric.get('lineLyric'))
+        # else:
+        #     lyric_list = None
+        return lyric_str
 
     def save_into_db(self):
-        sql = 'insert ignore into musicdata.kwmusic(music_name,music_author,music_picture,music_rank,music_hasmv,music_album,music_albumpic,music_time,music_releaseDate,music_mp3_url,music_path,music_lyric) values("%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s")'\
+        sql = 'insert ignore into musicdata.kwmusic(music_name,music_author,music_key,music_picture,music_rank,music_hasmv,music_album,music_albumpic,music_time,music_releaseDate,music_mp3_url,music_path,music_lyric) values("%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s","%s")'\
               % (pymysql.escape_string(self.music_details["歌曲名字"]),
                      pymysql.escape_string(self.music_details["歌手"]),
+                    pymysql.escape_string(self.music_details["歌曲名字"]+'-'+self.music_details["歌手"]),
                      pymysql.escape_string(self.music_details["图片"]),
                      pymysql.escape_string(self.music_details["排序变化"]),
                      self.music_details["是否有MV"],
@@ -152,9 +158,10 @@ class KuwoMusicSpider:
 
     def save_mp3(self,mp3):
         file_path = "F:\\PythonMusic\\{}+{}.mp3"
-        print("正在下载第", self.music_details["歌曲名字"], "歌曲")
-        with open(file_path.format(self.music_details["歌曲名字"], self.music_details["歌手"]),"wb") as mf:
-            mf.write(mp3)
+        if os.path.exists(file_path) is False:
+            print("正在下载第", self.music_details["歌曲名字"], "歌曲")
+            with open(file_path.format(self.music_details["歌曲名字"], self.music_details["歌手"]),"wb") as mf:
+                mf.write(mp3)
 
     def connect_mysql(self):
         self.connet_mysql = pymysql.connect(host='127.0.0.1',
@@ -195,8 +202,12 @@ class KuwoMusicSpider:
             t.start()
             t.join()
         print("main thread end")
-        # data save
+
         self.save_data()
+        # for q in [self.url_queue, self.html_queue, self.music_queue]:
+        #     q.join()
+        # print("all thread end")
+
         self.cursor.close()
         self.connet_mysql.close()
 

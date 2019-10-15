@@ -77,9 +77,9 @@ WSGI_APPLICATION = 'iservice.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'musicdata',
+        'NAME': 'hubcrms',
         'USER': 'root',
-        'PASSWORD': 'password',
+        'PASSWORD': '18091495112',
         'HOST': '127.0.0.1',
         'PORT': '3306',
     }
